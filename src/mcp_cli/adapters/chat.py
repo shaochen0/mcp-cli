@@ -205,12 +205,32 @@ class ChatCommandAdapter:
         - Flags: --flag or -f
         - Options: --option value
         - Positional args (if command expects them)
+        - -- separator (everything after -- is treated as positional args)
         """
         kwargs: dict[str, Any] = {}
         i = 0
+        positional_started = False  # Track if we've seen --
 
         while i < len(args):
             arg = args[i]
+
+            # Handle -- separator: everything after -- is positional
+            if arg == "--":
+                positional_started = True
+                i += 1
+                # Add remaining args as positional
+                if "args" not in kwargs:
+                    kwargs["args"] = []
+                kwargs["args"].extend(args[i:])
+                break
+
+            # Once we've seen --, everything is positional
+            if positional_started:
+                if "args" not in kwargs:
+                    kwargs["args"] = []
+                kwargs["args"].append(arg)
+                i += 1
+                continue
 
             if arg.startswith("--"):
                 # Long option
