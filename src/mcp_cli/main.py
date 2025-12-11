@@ -678,13 +678,14 @@ direct_registered = ["chat"]  # Chat is registered directly via @app.command
 # Shared provider command function
 def _run_provider_command(args, log_prefix="Provider command"):
     """Shared function to run provider commands."""
-    from mcp_cli.commands.actions.providers import provider_action_async
+    from mcp_cli.commands.actions.providers import provider_action_async, ProviderActionParams
 
     # Initialize context for the provider command
     initialize_context()
 
+    params = ProviderActionParams(args=args)
     try:
-        asyncio.run(provider_action_async(args))
+        asyncio.run(provider_action_async(params))
     except Exception as e:
         output.error(f"Error: {e}")
         raise typer.Exit(1)
