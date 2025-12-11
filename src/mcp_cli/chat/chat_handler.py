@@ -37,6 +37,7 @@ async def handle_chat_mode(
     confirm_mode: str | None = None,
     max_turns: int = 30,
     model_manager=None,  # FIXED: Accept model_manager from caller
+    system_prompt: str | None = None,  # Custom system prompt
 ) -> bool:
     """
     Launch the interactive chat loop with streaming support.
@@ -82,6 +83,7 @@ async def handle_chat_mode(
                 api_base=api_base,
                 api_key=api_key,
                 model_manager=app_context.model_manager,  # Use the same instance
+                system_prompt=system_prompt,  # Custom system prompt
             )
 
             if not await ctx.initialize():

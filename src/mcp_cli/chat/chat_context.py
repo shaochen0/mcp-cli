@@ -58,6 +58,7 @@ class ChatContext:
             dict[str, Any]
         ] = []  # These remain dicts for OpenAI API
         self.tool_name_mapping: dict[str, str] = {}
+        self._custom_system_prompt: str | None = None  # Custom system prompt override
 
         logger.debug(f"ChatContext created with {self.provider}/{self.model}")
 
@@ -70,6 +71,7 @@ class ChatContext:
         api_base: str | None = None,
         api_key: str | None = None,
         model_manager: ModelManager | None = None,  # FIXED: Accept model_manager
+        system_prompt: str | None = None,  # Custom system prompt
     ) -> "ChatContext":
         """
         Factory method for convenient creation.
@@ -81,6 +83,7 @@ class ChatContext:
             api_base: API base URL override (optional)
             api_key: API key override (optional)
             model_manager: Pre-configured ModelManager (optional, creates new if None)
+            system_prompt: Custom system prompt (optional)
 
         Returns:
             Configured ChatContext instance
@@ -106,6 +109,7 @@ class ChatContext:
             model_manager.switch_model(current_provider, model)
 
         instance = cls(tool_manager, model_manager)
+        instance._custom_system_prompt = system_prompt
         return instance
 
     # ── Properties that delegate to ModelManager ──────────────────────────
@@ -210,13 +214,18 @@ class ChatContext:
 
     def _initialize_conversation(self) -> None:
         """Initialize conversation with system prompt."""
-        # Convert ToolInfo objects to dicts for system prompt generation
-        tools_for_prompt = []
-        for tool in self.internal_tools:
-            # Convert to LLM format and then to dict
-            tools_for_prompt.append(tool.to_llm_format().to_dict())
+        # Use custom system prompt if provided, otherwise generate default
+        if self._custom_system_prompt:
+            system_prompt = self._custom_system_prompt
+        else:
+            # Convert ToolInfo objects to dicts for system prompt generation
+            tools_for_prompt = []
+            for tool in self.internal_tools:
+                # Convert to LLM format and then to dict
+                tools_for_prompt.append(tool.to_llm_format().to_dict())
 
-        system_prompt = generate_system_prompt(tools_for_prompt)
+            system_prompt = generate_system_prompt(tools_for_prompt)
+
         self.conversation_history = [
             Message(role=MessageRole.SYSTEM, content=system_prompt)
         ]
@@ -279,7 +288,16 @@ class ChatContext:
 
     def regenerate_system_prompt(self) -> None:
         """Regenerate system prompt with current tools."""
-        system_prompt = generate_system_prompt(self.internal_tools)
+        # Use custom system prompt if provided, otherwise generate default
+        if self._custom_system_prompt:
+            system_prompt = self._custom_system_prompt
+        else:
+            # Convert tools to dict format for prompt generation
+            tools_for_prompt = []
+            for tool in self.internal_tools:
+                tools_for_prompt.append(tool.to_llm_format().to_dict())
+            system_prompt = generate_system_prompt(tools_for_prompt)
+
         if (
             self.conversation_history
             and self.conversation_history[0].role == MessageRole.SYSTEM

@@ -48,6 +48,55 @@ setup_logging(level="ERROR", quiet=False, verbose=False)
 # ──────────────────────────────────────────────────────────────────────────────
 logger = get_logger("main")
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helper functions
+# ──────────────────────────────────────────────────────────────────────────────
+def load_system_prompt(prompt_input: str | None) -> str | None:
+    """
+    Load system prompt from file or return as-is.
+    
+    If prompt_input starts with '@', treat the rest as a file path.
+    Otherwise, return the input directly.
+    
+    Args:
+        prompt_input: System prompt text or file path (with @ prefix)
+        
+    Returns:
+        System prompt content, or None if prompt_input is None
+        
+    Raises:
+        FileNotFoundError: If file path is specified but file doesn't exist
+        IOError: If file cannot be read
+    """
+    if prompt_input is None:
+        return None
+    
+    # Check if it's a file path (starts with @)
+    if prompt_input.startswith("@"):
+        file_path = prompt_input[1:].strip()
+        if not file_path:
+            raise ValueError("File path cannot be empty after @ prefix")
+        
+        # Expand user home directory
+        file_path = os.path.expanduser(file_path)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"System prompt file not found: {file_path}")
+        
+        # Read file content
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            logger.debug(f"Loaded system prompt from file: {file_path} ({len(content)} chars)")
+            return content
+        except IOError as e:
+            raise IOError(f"Failed to read system prompt file {file_path}: {e}")
+    
+    # Return as-is if not a file path
+    return prompt_input
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Typer root app
 # ──────────────────────────────────────────────────────────────────────────────
@@ -367,10 +416,22 @@ def _chat_command(
         "--init-timeout",
         help="Server initialization timeout in seconds",
     ),
+    system_prompt: str | None = typer.Option(
+        None,
+        "--system-prompt",
+        help="Custom system prompt (text or file path with @ prefix, e.g., @/path/to/prompt.txt)",
+    ),
 ) -> None:
     """Start chat mode (same as default behavior without subcommand)."""
     # Re-configure logging based on user options
     setup_logging(level=log_level, quiet=quiet, verbose=verbose)
+
+    # Load system prompt from file if needed
+    try:
+        system_prompt = load_system_prompt(system_prompt)
+    except (FileNotFoundError, IOError, ValueError) as e:
+        output.error(f"Failed to load system prompt: {e}")
+        raise typer.Exit(1)
 
     # Set confirmation mode if specified
     if confirm_mode:
@@ -486,6 +547,7 @@ def _chat_command(
                 model=effective_model,
                 api_base=api_base,
                 api_key=api_key,
+                system_prompt=system_prompt,
             )
             logger.debug(f"Chat mode completed with success: {success}")
         except asyncio.TimeoutError:
@@ -1533,7 +1595,9 @@ def cmd_command(
         None, "--tool-args", help="Tool arguments as JSON"
     ),
     system_prompt: str | None = typer.Option(
-        None, "--system-prompt", help="Custom system prompt"
+        None,
+        "--system-prompt",
+        help="Custom system prompt (text or file path with @ prefix, e.g., @/path/to/prompt.txt)",
     ),
     raw: bool = typer.Option(False, "--raw", help="Raw output without formatting"),
     single_turn: bool = typer.Option(
@@ -1560,6 +1624,13 @@ def cmd_command(
     """Command mode for Unix-friendly automation and scripting."""
     # Configure logging and theme
     _setup_command_logging(quiet, verbose, log_level, theme)
+
+    # Load system prompt from file if needed
+    try:
+        system_prompt = load_system_prompt(system_prompt)
+    except (FileNotFoundError, IOError, ValueError) as e:
+        output.error(f"Failed to load system prompt: {e}")
+        raise typer.Exit(1)
 
     # Use ModelManager to resolve provider/model
     from mcp_cli.model_management import ModelManager
