@@ -114,16 +114,48 @@ class ClientFactory:
             # Use chuk_llm's client factory with api_key and api_base overrides
             # This works for ALL OpenAI-compatible providers
             try:
-                from chuk_llm.llm.client import get_client
+                import os
+                from chuk_llm.llm.providers.openai_client import OpenAILLMClient
 
-                client = get_client(
-                    provider="openai_compatible",  # Use chuk_llm's openai_compatible provider
-                    model=model or config.default_model,
-                    api_key=api_key,
-                    api_base=config.api_base,
-                )
-                self._client_cache[cache_key] = client
-                logger.debug(f"Created chuk_llm client for custom provider {provider}")
+                # Ensure we have a model - chuk_llm requires it
+                target_model = model or config.default_model
+                if not target_model:
+                    # Fallback: use first model in config, or raise error
+                    if config.models:
+                        target_model = config.models[0]
+                        logger.warning(
+                            f"No model specified for {provider}, using first available: {target_model}"
+                        )
+                    else:
+                        raise ValueError(
+                            f"No model specified for provider {provider} and no models configured. "
+                            f"Please specify --model or add models when configuring the provider."
+                        )
+
+                # chuk_llm's openai_compatible provider requires OPENAI_API_KEY env var
+                # Temporarily set it for custom providers
+                original_openai_key = os.environ.get("OPENAI_API_KEY")
+                os.environ["OPENAI_API_KEY"] = api_key
+
+                try:
+                    # Directly instantiate OpenAILLMClient to bypass provider config validation
+                    # This avoids the "Missing 'default_model'" error from chuk_llm's validation
+                    client = OpenAILLMClient(
+                        model=target_model,
+                        api_key=api_key,
+                        api_base=config.api_base,
+                    )
+                    self._client_cache[cache_key] = client
+                    logger.debug(
+                        f"Created chuk_llm client for custom provider {provider} with model {target_model}"
+                    )
+                finally:
+                    # Restore original OPENAI_API_KEY
+                    if original_openai_key is not None:
+                        os.environ["OPENAI_API_KEY"] = original_openai_key
+                    elif "OPENAI_API_KEY" in os.environ:
+                        del os.environ["OPENAI_API_KEY"]
+
             except Exception as e:
                 logger.error(f"Failed to create chuk_llm client for {provider}: {e}")
                 raise

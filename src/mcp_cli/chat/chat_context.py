@@ -95,17 +95,18 @@ class ChatContext:
                     name=provider, api_key=api_key, api_base=api_base or ""
                 )
 
-            # Switch model if requested
-            if provider and model:
-                model_manager.switch_model(provider, model)
-            elif provider:
-                model_manager.switch_provider(provider)
-            elif model:
-                # Switch model in current provider
-                current_provider = model_manager.get_active_provider()
-                model_manager.switch_model(current_provider, model)
+        # Switch model if requested - always apply even if model_manager was provided
+        if provider and model:
+            model_manager.switch_model(provider, model)
+        elif provider:
+            model_manager.switch_provider(provider)
+        elif model:
+            # Switch model in current provider
+            current_provider = model_manager.get_active_provider()
+            model_manager.switch_model(current_provider, model)
 
-        return cls(tool_manager, model_manager)
+        instance = cls(tool_manager, model_manager)
+        return instance
 
     # ── Properties that delegate to ModelManager ──────────────────────────
     @property
